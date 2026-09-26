@@ -41,7 +41,7 @@ session database and start Sabuth:
 
 ```bash
 npm run build
-npx wrangler d1 execute site-creator-d1 --local --file drizzle/0000_late_the_spike.sql --config dist/server/wrangler.json
+npx wrangler d1 execute site-creator-d1 --local --persist-to .wrangler/state --file drizzle/0000_late_the_spike.sql --config dist/server/wrangler.json
 npm run dev
 ```
 

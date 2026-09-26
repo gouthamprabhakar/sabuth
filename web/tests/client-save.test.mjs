@@ -16,7 +16,7 @@ function setup(){
   }}
  }
  const h={console,Date,Map,SpreadsheetApp:{flush(){}},PropertiesService:{getScriptProperties:()=>({getProperty:()=> 'false'})},Utilities:{DigestAlgorithm:{SHA_256:'sha256'},computeDigest:(_,t)=>[...crypto.createHash('sha256').update(t).digest()],formatDate(d,tz,format){const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:tz,year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).formatToParts(d).map(p=>[p.type,p.value]));if(format==='yyyy-MM-dd')return new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).format(d);return `${parts.day}-${parts.month.slice(0,3)}-${parts.year}`+(format.includes('HH')?` ${parts.hour}:${parts.minute}:${parts.second}`:'')}},DocumentApp:{openById(){throw Error('Document unavailable')},create(){throw Error('Document unavailable')}}};
- vm.createContext(h);vm.runInContext(fs.readFileSync('google-apps-script/Code.gs','utf8'),h);
+ vm.createContext(h);vm.runInContext(fs.readFileSync('../google-apps-script/Code.gs','utf8'),h);
  for(const [name,variable,extras] of [['Case Register','REGISTER_HEADERS',['Previous Date','Created Date','Source/Confirmation']],['Daily Court List','DAILY_HEADERS',['Last Updated','Created Date']],['Sabuth Activity','JOURNAL_HEADERS',[]],['Sabuth Morning Lists','SNAP_HEADERS',[]],['Sabuth Runs','RUN_HEADERS',[]],['Clients','CLIENT_HEADERS',[]],['Sabuth Documents','DOCUMENT_HEADERS',[]]])sheets.set(name,new Sheet(name,[...vm.runInContext(variable,h),...extras]));
  const book={getSheetByName:n=>sheets.get(n)};return {h,book,sheets};
 }

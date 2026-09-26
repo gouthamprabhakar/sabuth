@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 const exported={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/case-types.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:exported});
-const bridge={};vm.createContext(bridge);vm.runInContext(fs.readFileSync('google-apps-script/Code.gs','utf8'),bridge);
+const bridge={};vm.createContext(bridge);vm.runInContext(fs.readFileSync('../google-apps-script/Code.gs','utf8'),bridge);
 test('all 25 types build the exact supplied punctuation and preserve numeric segments',()=>{
  assert.equal(exported.CASE_TYPES.length,25);
  for(const [type] of exported.CASE_TYPES)for(const [number,suffix] of [['842','07'],['123','767'],['1','1'],['0001','0007'],['12345678901234567890','87778989']]){
