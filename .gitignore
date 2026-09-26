@@ -1,0 +1,35 @@
+# macOS and editors
+.DS_Store
+.vscode/
+.idea/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
+*.p12
+*.credentials.json
+.team-credentials.tmp
+
+# Dependencies and generated output
+node_modules/
+web/node_modules/
+web/.next/
+web/.vinext/
+web/dist/
+web/out/
+web/coverage/
+web/.wrangler/
+web/.sites-runtime/
+web/tsconfig.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
