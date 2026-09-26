@@ -26,6 +26,7 @@ web/coverage/
 web/.wrangler/
 web/.sites-runtime/
 web/tsconfig.tsbuildinfo
+web/next-env.d.ts
 
 # Logs
 *.log
