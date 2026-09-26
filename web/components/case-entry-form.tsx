@@ -6,25 +6,21 @@ import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {NativeSelect,NativeSelectOption} from '@/components/ui/native-select';
 import {AlertDialog,AlertDialogContent,AlertDialogHeader,AlertDialogTitle,AlertDialogDescription,AlertDialogFooter,AlertDialogCancel,AlertDialogAction} from '@/components/ui/alert-dialog';
-import {type Workspace,type Matter,type Client,displayDate,validDate} from '@/lib/domain';
+import {type Workspace,type Matter,displayDate,validDate} from '@/lib/domain';
 import {candidates,type CaseIndexEntry} from '@/lib/case-matching';
 import {CASE_TYPES,buildCaseNumber,digitsOnly} from '@/lib/case-types';
 import {clientById,hasExactClientName,matchingClients} from '@/lib/client-options';
 export type EntryPayload={date:string;listingDate:string;key:string;version:string;nextDate:string;source:string;stage:string;client:string;clientId:string;matter:string;court:string;mode:'evening'|'adhoc';requestId:string};
-type Props={data:Workspace;seed?:Matter;date:string;evening:boolean;initialClientName?:string;onAddClient:(name:string)=>void;onCreateClient:(name:string,requestId:string)=>Promise<Client>;requestId:string;onSave:(action:'create'|'update',payload:EntryPayload)=>Promise<void>;busy:boolean};
-export function CaseEntryForm({data,seed,date,evening,initialClientName,onAddClient,onCreateClient,requestId,onSave,busy}:Props){
- const [addedClients,setAddedClients]=useState<Client[]>([]);
- const clients=useMemo(()=>Array.from(new Map([...data.matters.map(m=>({id:m.id,name:m.client})),...(data.clients||[]),...addedClients].map(c=>[c.id,{...c,label:c.name+' — '+c.id}])).values()).sort((a,b)=>a.name.localeCompare(b.name)),[data.matters,data.clients,addedClients]);
- const initialClient=clients.find(c=>c.name===initialClientName);
+type Props={data:Workspace;seed?:Matter;date:string;evening:boolean;requestId:string;onSave:(action:'create'|'update',payload:EntryPayload)=>Promise<void>;busy:boolean};
+export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Props){
+ const clients=useMemo(()=>Array.from(new Map([...data.matters.map(m=>({id:m.id,name:m.client})),...(data.clients||[])].map(c=>[c.id,{...c,label:c.name+' — '+c.id}])).values()).sort((a,b)=>a.name.localeCompare(b.name)),[data.matters,data.clients]);
  const stages=useMemo(()=>Array.from(new Set(data.matters.map(m=>m.stage.trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'en',{sensitivity:'base'})),[data.matters]);
- const [clientId,setClientId]=useState(seed?.id||initialClient?.id||'');
- const [newClient,setNewClient]=useState(initialClientName!==undefined&&!initialClient);
- const [clientName,setClientName]=useState(initialClientName||'');
- const [clientSearch,setClientSearch]=useState(seed?.client||initialClient?.name||'');
+ const [clientId,setClientId]=useState(seed?.id||'');
+ const [newClient,setNewClient]=useState(false);
+ const [clientName,setClientName]=useState('');
+ const [clientSearch,setClientSearch]=useState(seed?.client||'');
  const [clientOpen,setClientOpen]=useState(false);
- const [addingClient,setAddingClient]=useState(false);
  const clientPicker=useRef<HTMLDivElement>(null);
- const addAttempt=useRef({name:'',id:''});
  const [attempted,setAttempted]=useState(false);
  const [selected,setSelected]=useState(seed);
  const [caseType,setCaseType]=useState('');
@@ -47,13 +43,7 @@ export function CaseEntryForm({data,seed,date,evening,initialClientName,onAddCli
  const filteredClients=matchingClients(clients,clientSearch);
  const exactClient=hasExactClientName(clients,clientSearch);
  const invalid={client:!currentClient&&!newClient||newClient&&!clientName.trim(),type:!selected&&!caseType,number:!selected&&!number,suffix:!selected&&!suffix,previous:!validDate(previousDate),reported:!validDate(reportedDate),stage:!evening&&!stage.trim()};
- async function addClient(name:string){
-  name=name.trim();if(!name){setNewClient(true);setClientOpen(false);setError('Enter the client name.');return}
-  if(addingClient)return;setAddingClient(true);setError('');
-  if(addAttempt.current.name!==name)addAttempt.current={name,id:crypto.randomUUID()};
-  try{const client=await onCreateClient(name,addAttempt.current.id);setAddedClients(list=>[...list.filter(c=>c.id!==client.id),client]);setClientId(client.id);setClientSearch(client.name);setClientName('');setNewClient(false);setClientOpen(false);resetCase();if(evening)onAddClient(client.name)}
-  catch(e){setError((e as Error).message)}finally{setAddingClient(false)}
- }
+ function chooseNewClient(name:string){name=name.trim();if(!name)return;setClientId('');setClientName(name);setClientSearch(name);setNewClient(true);setClientOpen(false);setError('');resetCase()}
  function chooseClient(id:string){const client=clientById(clients,id);if(!client)return;setClientId(id);setClientSearch(client.name);setClientOpen(false);setNewClient(false);resetCase()}
  function selectExistingMatter(key:string){
   const m=data.matters.find(m=>m.key===key);
@@ -85,24 +75,17 @@ export function CaseEntryForm({data,seed,date,evening,initialClientName,onAddCli
  return <><form noValidate onSubmit={submit} className="update-form">
   {error&&<p role="alert" className="inline-error"><AlertCircle size={16}/>{error}</p>}
   <div className="input-step"><span>1</span><strong>Choose the client</strong></div>
-  {!newClient?<>
-   <div className="client-picker" ref={clientPicker} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null))setClientOpen(false)}}><label htmlFor="client-search">Client Name *</label>
-    <div className={attempted&&invalid.client?'client-combobox invalid':'client-combobox'}>
-     <Input id="client-search" role="combobox" aria-autocomplete="list" aria-controls="client-options" aria-label="Client Name" aria-expanded={clientOpen} aria-invalid={attempted&&invalid.client} autoComplete="off" placeholder="Search client name or ID" value={clientSearch} disabled={addingClient||busy} onFocus={()=>setClientOpen(true)} onChange={event=>{setClientSearch(event.target.value);setClientOpen(true);setClientId('');resetCase()}} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setClientOpen(false)}}}/>
-     {clientOpen&&<div id="client-options" role="listbox" aria-label="Matching clients" className="client-options">
-      {filteredClients.length?filteredClients.map(c=><button type="button" role="option" aria-selected={clientId===c.id} key={c.id} onMouseDown={event=>event.preventDefault()} onClick={()=>chooseClient(c.id)}><span>{c.name}</span><span className="client-option-id">{c.id}</span></button>):<span className="client-empty">No matching client.</span>}
-      {clientSearch.trim()&&!exactClient&&<Button type="button" variant="outline" className="add-client-option" disabled={addingClient} onMouseDown={event=>event.preventDefault()} onClick={()=>void addClient(clientSearch)}>{addingClient?'Adding client…':`Add as new client “${clientSearch.trim()}”`}</Button>}
-     </div>}
-    </div>
+  <div className="client-picker" ref={clientPicker} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null))setClientOpen(false)}}><label htmlFor="client-search">Client Name *</label>
+   <div className={attempted&&invalid.client?'client-combobox invalid':'client-combobox'}>
+    <Input id="client-search" role="combobox" aria-autocomplete="list" aria-controls="client-options" aria-label="Client Name" aria-expanded={clientOpen} aria-invalid={attempted&&invalid.client} autoComplete="off" placeholder="Search client name or ID" value={clientSearch} disabled={busy} onFocus={()=>setClientOpen(true)} onChange={event=>{setClientSearch(event.target.value);setClientOpen(true);setClientId('');setClientName('');setNewClient(false);resetCase()}} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setClientOpen(false)}}}/>
+    {clientOpen&&<div id="client-options" role="listbox" aria-label="Matching clients" className="client-options">
+     {filteredClients.length?filteredClients.map(c=><button type="button" role="option" aria-selected={clientId===c.id} key={c.id} onMouseDown={event=>event.preventDefault()} onClick={()=>chooseClient(c.id)}><span>{c.name}</span><span className="client-option-id">{c.id}</span></button>):<span className="client-empty">No matching client.</span>}
+     {clientSearch.trim()&&!exactClient&&<Button type="button" variant="outline" className="add-client-option" onMouseDown={event=>event.preventDefault()} onClick={()=>chooseNewClient(clientSearch)}>{`Use “${clientSearch.trim()}” as a new client`}</Button>}
+    </div>}
    </div>
-   {currentClient&&<div className="selected-matter"><span>Selected client · {currentClient.id}</span><strong>{currentClient.name}</strong></div>}
-   <button type="button" className="text-link" disabled={addingClient} onClick={()=>{setClientName(currentClient?'':clientSearch);setNewClient(true);setClientOpen(false);setClientId('');resetCase()}}>Client not listed? Add a new client</button>
-  </>:<>
-   <label>New client name *<Input autoFocus aria-invalid={attempted&&invalid.client} maxLength={160} value={clientName} onChange={e=>{setClientName(e.target.value);setReview(false)}}/></label>
-   <Button type="button" variant="outline" disabled={addingClient} onClick={()=>void addClient(clientName)}>{addingClient?'Adding client…':'Add as new client'}</Button>
-   <p className="form-note">The client is saved immediately. Add their case details below.</p>
-   <button type="button" className="text-link" onClick={()=>{setNewClient(false);setClientSearch('');resetCase()}}>Choose an existing client</button>
-  </>}
+  </div>
+  {currentClient&&<div className="selected-matter"><span>Selected client · {currentClient.id}</span><strong>{currentClient.name}</strong></div>}
+  {newClient&&<div className="selected-matter"><span>New client</span><strong>{clientName}</strong><span>The client will be added when this case is saved.</span></div>}
   <div className="input-step"><span>2</span><strong>{newClient?'Enter the case details':'Choose or add the case'}</strong></div>
   {ownCases.length>0&&!selected&&<div className="existing-cases"><span>Existing cases for {currentClient?.name}</span>{ownCases.map(m=><button type="button" key={m.key} onClick={()=>selectExistingMatter(m.key)}>{m.caseNo}<ArrowRight size={13}/></button>)}</div>}
   {selected?<div className="selected-matter"><span>Updating an existing case</span><strong>{selected.caseNo} · {selected.client}</strong><span>Current recorded hearing: {displayDate(selected.nextDate)}</span><button type="button" className="text-link" onClick={resetCase}>Choose a different case</button></div>:!evening&&<>
@@ -130,7 +113,7 @@ export function CaseEntryForm({data,seed,date,evening,initialClientName,onAddCli
   </>}
   <label>Source / confirmation (optional)<textarea value={source} onChange={e=>{setSource(e.target.value);setReview(false)}} maxLength={3000} placeholder="Who confirmed the date? Include the relevant note."/></label>
   {review&&<div className="save-review"><strong>Review before saving</strong><p>{selected?.client||currentClient?.name||clientName} · {selected?.caseNo||caseText}</p><p>Previous Date: {displayDate(previousDate)}</p><p>Reported Hearing Date: {displayDate(reportedDate)}</p>{!evening&&<p>Stage: {stage||'Not specified'}</p>}</div>}
-  <Button type="submit" disabled={busy||addingClient}>{busy?<Loader2 className="spin"/>:<Check/>}{busy?'Saving…':review?'Confirm and save':'Review update'}</Button>
+  <Button type="submit" disabled={busy}>{busy?<Loader2 className="spin"/>:<Check/>}{busy?'Saving…':review?'Confirm and save':'Review update'}</Button>
  </form>
  <AlertDialog open={popup} onOpenChange={setPopup}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{matches.length===1?'This case already exists':'Choose the existing case'}</AlertDialogTitle><AlertDialogDescription>{matches.length===1?`${matches[0].caseNo} already exists for ${currentClient?.name}. Do you want to update it?`:`More than one existing record matches ${caseText}. Choose the correct case.`}</AlertDialogDescription></AlertDialogHeader>
   {matches.length>1&&<div className="duplicate-options">{matches.map(m=><Button key={m.key} variant="outline" onClick={()=>selectExistingMatter(m.key)}>{m.caseNo} · {m.source==='register'?'Case Register':'Daily Court List'}</Button>)}</div>}

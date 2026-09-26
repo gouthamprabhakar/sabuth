@@ -22,3 +22,12 @@ test('new-client choice appears only when the typed name is not an existing clie
  assert.equal(exported.hasExactClientName(clients,' goutham rao '),true);
  assert.equal(exported.hasExactClientName(clients,'Goutham New Client'),false);
 });
+
+test('new-client selection stays in the case form and does not call a separate save action',()=>{
+ const form=fs.readFileSync('components/case-entry-form.tsx','utf8');
+ const page=fs.readFileSync('app/page.tsx','utf8');
+ assert.match(form,/chooseNewClient\(clientSearch\)/);
+ assert.match(form,/will be added when this case is saved/);
+ assert.doesNotMatch(form,/New client name \*/);
+ assert.doesNotMatch(page,/request\('addClient'/);
+});
