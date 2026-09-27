@@ -14,7 +14,6 @@ export type EntryPayload={date:string;listingDate:string;key:string;version:stri
 type Props={data:Workspace;seed?:Matter;date:string;evening:boolean;requestId:string;onSave:(action:'create'|'update',payload:EntryPayload)=>Promise<void>;busy:boolean};
 export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Props){
  const clients=useMemo(()=>Array.from(new Map([...data.matters.map(m=>({id:m.id,name:m.client})),...(data.clients||[])].map(c=>[c.id,{...c,label:c.name+' — '+c.id}])).values()).sort((a,b)=>a.name.localeCompare(b.name)),[data.matters,data.clients]);
- const stages=useMemo(()=>Array.from(new Set(data.matters.map(m=>m.stage.trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'en',{sensitivity:'base'})),[data.matters]);
  const [clientId,setClientId]=useState(seed?.id||'');
  const [newClient,setNewClient]=useState(false);
  const [clientName,setClientName]=useState('');
@@ -41,7 +40,7 @@ export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Pro
  function resetCase(){setSelected(undefined);setCaseType('');setNumber('');setSuffix('');setStage('');setCourt('');setReview(false);setError('')}
  const filteredClients=matchingClients(clients,clientSearch);
  const exactClient=hasExactClientName(clients,clientSearch);
- const invalid={client:!currentClient&&!newClient||newClient&&!clientName.trim(),type:!selected&&!caseType,number:!selected&&!number,suffix:!selected&&!suffix,previous:!validDate(previousDate),reported:!validDate(reportedDate),stage:!evening&&!stage.trim()};
+ const invalid={client:!currentClient&&!newClient||newClient&&!clientName.trim(),type:!selected&&!caseType,number:!selected&&!number,suffix:!selected&&!suffix,previous:!!previousDate&&!validDate(previousDate),reported:!validDate(reportedDate),stage:!evening&&!stage.trim()};
  function chooseNewClient(name:string){name=name.trim();if(!name)return;setClientId('');setClientName(name);setClientSearch(name);setNewClient(true);setClientOpen(false);setError('');resetCase()}
  function chooseClient(id:string){const client=clientById(clients,id);if(!client)return;setClientId(id);setClientSearch(client.name);setClientOpen(false);setNewClient(false);resetCase()}
  function selectExistingMatter(key:string){
@@ -60,8 +59,9 @@ export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Pro
    // Existing clients are matched automatically; new clients need no separate case-check step.
    if(!newClient&&matches.length){setPopup(true);return}
   }
-  if(!validDate(previousDate)||!validDate(reportedDate)){setError('Choose both hearing dates.');return}
-  if(reportedDate<previousDate){setError('Next Hearing Date must be on or after Previous Date.');return}
+  if(previousDate&&!validDate(previousDate)){setError('Choose a valid Previous Date or select N/A.');return}
+  if(!validDate(reportedDate)){setError('Choose the Next Hearing Date.');return}
+  if(previousDate&&reportedDate<previousDate){setError('Next Hearing Date must be on or after Previous Date.');return}
   if(newClient){
    const normalized=clientName.replace(/[^a-z0-9]/gi,'').toLowerCase();
    if(!normalized){setError('Enter the client’s name.');return}
@@ -103,14 +103,14 @@ export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Pro
   </>}
   <div className="input-step"><span>3</span><strong>Confirm the hearing details</strong></div>
   <div className="form-grid">
-   <div><label>Previous Date *</label><DateInput label="Previous Date" value={previousDate} disabled={evening} invalid={attempted&&invalid.previous} onChange={value=>{setPreviousDate(value);setReview(false)}}/></div>
+   <div><label>Previous Date (optional)</label><DateInput label="Previous Date" value={previousDate} disabled={evening} invalid={attempted&&invalid.previous} onChange={value=>{setPreviousDate(value);setReview(false)}}/><Button type="button" variant="outline" size="sm" disabled={evening} onClick={()=>{setPreviousDate('');setReview(false)}}>N/A</Button></div>
    <div><label>Next Hearing Date *</label><DateInput label="Next Hearing Date" value={reportedDate} invalid={attempted&&invalid.reported} onChange={value=>{setReportedDate(value);setReview(false)}}/></div>
   </div>
   {!evening&&<>
-   <label>Stage / purpose *<Input aria-invalid={attempted&&invalid.stage} list="stage-options" value={stage} onChange={e=>{setStage(e.target.value);setReview(false)}} placeholder="Select or enter the confirmed stage" maxLength={200}/><datalist id="stage-options">{stages.map(s=><option key={s} value={s}/>)}</datalist></label>
+   <label>Stage / purpose *<Input aria-invalid={attempted&&invalid.stage} value={stage} onChange={e=>{setStage(e.target.value);setReview(false)}} placeholder="Type the stage or purpose" maxLength={200}/></label>
    {!selected&&<label>Court hall (optional)<Input value={court} onChange={e=>{setCourt(e.target.value);setReview(false)}} placeholder="Leave blank if unconfirmed" maxLength={100}/></label>}
   </>}
-  {review&&<div className="save-review"><strong>Review before saving</strong><p>{selected?.client||currentClient?.name||clientName} · {selected?.caseNo||caseText}</p><p>Previous Date: {displayDate(previousDate)}</p><p>Next Hearing Date: {displayDate(reportedDate)}</p>{!evening&&<p>Stage: {stage||'Not specified'}</p>}</div>}
+  {review&&<div className="save-review"><strong>Review before saving</strong><p>{selected?.client||currentClient?.name||clientName} · {selected?.caseNo||caseText}</p><p>Previous Date: {previousDate?displayDate(previousDate):'N/A'}</p><p>Next Hearing Date: {displayDate(reportedDate)}</p>{!evening&&<p>Stage: {stage||'Not specified'}</p>}</div>}
   <Button type="submit" disabled={busy}>{busy?<Loader2 className="spin"/>:<Check/>}{busy?'Saving…':review?'Confirm and save':'Review update'}</Button>
  </form>
  <AlertDialog open={popup} onOpenChange={setPopup}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{matches.length===1?'This case already exists':'Choose the existing case'}</AlertDialogTitle><AlertDialogDescription>{matches.length===1?`${matches[0].caseNo} already exists for ${currentClient?.name}. Do you want to update it?`:`More than one existing record matches ${caseText}. Choose the correct case.`}</AlertDialogDescription></AlertDialogHeader>
