@@ -31,3 +31,16 @@ test('new-client selection stays in the case form and does not call a separate s
  assert.doesNotMatch(form,/New client name \*/);
  assert.doesNotMatch(page,/request\('addClient'/);
 });
+
+test('client choices stay closed until focus and close when focus leaves the picker',()=>{
+ const form=fs.readFileSync('components/case-entry-form.tsx','utf8');
+ assert.match(form,/\[clientOpen,setClientOpen\]=useState\(false\)/);
+ assert.match(form,/onFocus=\{\(\)=>setClientOpen\(true\)\}/);
+ assert.match(form,/onBlur=\{event=>\{if\(!event\.currentTarget\.contains/);
+});
+
+test('source is not shown in the form because the authenticated user is recorded by the server',()=>{
+ const form=fs.readFileSync('components/case-entry-form.tsx','utf8');
+ assert.doesNotMatch(form,/Source \/ confirmation/);
+ assert.doesNotMatch(form,/<textarea/);
+});

@@ -69,8 +69,9 @@ test('all workspace reads and mutations reject anonymous requests, including Cha
 test('authenticated updates use the session identity and reject cross-origin writes',async()=>{
   const h=harness();await h.configure();const cookie=(await h.login('Preetham')).headers.get('set-cookie');
   h.env.GOOGLE_SCRIPT_URL='https://script.google.com/macros/s/test/exec';h.env.GOOGLE_SCRIPT_SECRET='test-bridge-key';
-  assert.equal((await h.workspace.POST(h.request('POST',{action:'update',actor:'Prabhakar',payload:{date:'2026-09-25'}},cookie))).status,200);
+  assert.equal((await h.workspace.POST(h.request('POST',{action:'update',actor:'Prabhakar',payload:{date:'2026-09-25',source:'Manually entered'}},cookie))).status,200);
   assert.equal(h.bridgeCalls[0].actor,'Preetham');
+  assert.equal(h.bridgeCalls[0].payload.source,'Preetham');
   assert.equal((await h.workspace.POST(h.request('POST',{action:'update',payload:{}},cookie,'https://other.test'))).status,403);
   assert.equal(h.bridgeCalls.length,1);
 });

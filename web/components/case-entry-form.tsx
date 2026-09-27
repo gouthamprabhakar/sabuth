@@ -10,7 +10,7 @@ import {type Workspace,type Matter,displayDate,validDate} from '@/lib/domain';
 import {candidates,type CaseIndexEntry} from '@/lib/case-matching';
 import {CASE_TYPES,buildCaseNumber,digitsOnly} from '@/lib/case-types';
 import {clientById,hasExactClientName,matchingClients} from '@/lib/client-options';
-export type EntryPayload={date:string;listingDate:string;key:string;version:string;nextDate:string;source:string;stage:string;client:string;clientId:string;matter:string;court:string;mode:'evening'|'adhoc';requestId:string};
+export type EntryPayload={date:string;listingDate:string;key:string;version:string;nextDate:string;stage:string;client:string;clientId:string;matter:string;court:string;mode:'evening'|'adhoc';requestId:string};
 type Props={data:Workspace;seed?:Matter;date:string;evening:boolean;requestId:string;onSave:(action:'create'|'update',payload:EntryPayload)=>Promise<void>;busy:boolean};
 export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Props){
  const clients=useMemo(()=>Array.from(new Map([...data.matters.map(m=>({id:m.id,name:m.client})),...(data.clients||[])].map(c=>[c.id,{...c,label:c.name+' — '+c.id}])).values()).sort((a,b)=>a.name.localeCompare(b.name)),[data.matters,data.clients]);
@@ -30,7 +30,6 @@ export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Pro
  const [reportedDate,setReportedDate]=useState('');
  const [stage,setStage]=useState(seed?.stage||'');
  const [court,setCourt]=useState(seed?.court||'');
- const [source,setSource]=useState('');
  const [error,setError]=useState('');
  const [popup,setPopup]=useState(false);
  const [review,setReview]=useState(false);
@@ -70,7 +69,7 @@ export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Pro
   }
   if(!review){setReview(true);return}
   // Keep the existing bridge mapping: date is the prior hearing; nextDate is the newly assigned date.
-  try{await onSave(selected?'update':'create',{date:previousDate,listingDate:date,key:selected?.key||'',version:selected?.version||'',nextDate:reportedDate,source,stage,client:selected?.client||(newClient?clientName:currentClient?.name)||'',clientId:selected?.id||(newClient?'':clientId),matter:selected?.matter||caseText,court,mode:evening?'evening':'adhoc',requestId});}catch(e){setError((e as Error).message)}
+  try{await onSave(selected?'update':'create',{date:previousDate,listingDate:date,key:selected?.key||'',version:selected?.version||'',nextDate:reportedDate,stage,client:selected?.client||(newClient?clientName:currentClient?.name)||'',clientId:selected?.id||(newClient?'':clientId),matter:selected?.matter||caseText,court,mode:evening?'evening':'adhoc',requestId});}catch(e){setError((e as Error).message)}
  }
  return <><form noValidate onSubmit={submit} className="update-form">
   {error&&<p role="alert" className="inline-error"><AlertCircle size={16}/>{error}</p>}
@@ -111,7 +110,6 @@ export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Pro
    <label>Stage / purpose *<Input aria-invalid={attempted&&invalid.stage} list="stage-options" value={stage} onChange={e=>{setStage(e.target.value);setReview(false)}} placeholder="Select or enter the confirmed stage" maxLength={200}/><datalist id="stage-options">{stages.map(s=><option key={s} value={s}/>)}</datalist></label>
    {!selected&&<label>Court hall (optional)<Input value={court} onChange={e=>{setCourt(e.target.value);setReview(false)}} placeholder="Leave blank if unconfirmed" maxLength={100}/></label>}
   </>}
-  <label>Source / confirmation (optional)<textarea value={source} onChange={e=>{setSource(e.target.value);setReview(false)}} maxLength={3000} placeholder="Who confirmed the date? Include the relevant note."/></label>
   {review&&<div className="save-review"><strong>Review before saving</strong><p>{selected?.client||currentClient?.name||clientName} · {selected?.caseNo||caseText}</p><p>Previous Date: {displayDate(previousDate)}</p><p>Reported Hearing Date: {displayDate(reportedDate)}</p>{!evening&&<p>Stage: {stage||'Not specified'}</p>}</div>}
   <Button type="submit" disabled={busy}>{busy?<Loader2 className="spin"/>:<Check/>}{busy?'Saving…':review?'Confirm and save':'Review update'}</Button>
  </form>

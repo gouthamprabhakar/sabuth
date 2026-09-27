@@ -31,7 +31,8 @@ export async function POST(req:Request){
  try{
   const body=await req.text();if(body.length>30000)return reply({error:'Update is too large.'},413);
   const {action,payload}=JSON.parse(body);if(!['addClient','update','create','prepareMorning','sendMorning','sendEvening','configureSchedule'].includes(action))return reply({error:'Unknown action.'},400);
-  return reply(await callBridge(action,payload,user.username));
+  const savedPayload=(action==='create'||action==='update')&&payload&&typeof payload==='object'&&!Array.isArray(payload)?{...payload,source:user.username}:payload;
+  return reply(await callBridge(action,savedPayload,user.username));
  }catch(e){return reply({error:(e as Error).message||'The update could not be confirmed.'},400)}
  }catch{return reply({error:'Team sign-in is temporarily unavailable.'},503)}
 }
