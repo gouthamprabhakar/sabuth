@@ -30,7 +30,7 @@ export async function POST(req:Request){
  const origin=req.headers.get('origin');if(!origin||origin!==new URL(req.url).origin)return reply({error:'Request origin is not allowed.'},403);
  try{
   const body=await req.text();if(body.length>30000)return reply({error:'Update is too large.'},413);
-  const {action,payload}=JSON.parse(body);if(!['addClient','update','create','prepareMorning','sendMorning','sendEvening','configureSchedule'].includes(action))return reply({error:'Unknown action.'},400);
+  const {action,payload}=JSON.parse(body);if(!['addClient','update','create','markReviewed','prepareMorning','sendMorning','sendEvening','configureSchedule'].includes(action))return reply({error:'Unknown action.'},400);
   const savedPayload=(action==='create'||action==='update')&&payload&&typeof payload==='object'&&!Array.isArray(payload)?{...payload,source:user.username}:payload;
   return reply(await callBridge(action,savedPayload,user.username));
  }catch(e){return reply({error:(e as Error).message||'The update could not be confirmed.'},400)}

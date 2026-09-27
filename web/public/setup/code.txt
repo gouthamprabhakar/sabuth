@@ -12,14 +12,16 @@ const JOURNAL_HEADERS=['Request ID','Timestamp','Actor','Action','Status','Plan'
 const SNAP_HEADERS=['Date','Position','Matter Key','Morning Row','Next Date'];
 const CLIENT_HEADERS=['Client ID','Client Name','Stage/Purpose','Previous Date','Source/Confirmation','CourtHall','Created Date','Last Updated'];
 const DOCUMENT_HEADERS=['Request ID','Matter Key','Status','Error','Last Updated'];
+const REVIEW_HEADERS=['Matter Key','Issue Fingerprint','Reviewed By','Reviewed At','Status'];
 const RUN_HEADERS=['Date','Morning State','Evening State','Morning Fingerprint','Error'];
 function setupSabuth(){
  firmAccount_();
  const book=SpreadsheetApp.openById(BOOK_ID);schema_(book);DriveApp.getFolderById(ACTIVE_FOLDER).getName();
- operational_(book,'Sabuth Activity',JOURNAL_HEADERS);operational_(book,'Sabuth Morning Lists',SNAP_HEADERS);operational_(book,'Sabuth Runs',RUN_HEADERS);
+ operational_(book,'Sabuth Activity',JOURNAL_HEADERS);operational_(book,'Sabuth Morning Lists',SNAP_HEADERS);operational_(book,'Sabuth Runs',RUN_HEADERS);operational_(book,'Sabuth Reviews',REVIEW_HEADERS);
  const props=PropertiesService.getScriptProperties();if(!props.getProperty('SABUTH_SECRET'))props.setProperty('SABUTH_SECRET',Utilities.getUuid()+Utilities.getUuid());
  if(!props.getProperty('AUTOMATION'))props.setProperty('AUTOMATION','false');
- console.log('Setup complete. Copy SABUTH_SECRET from Project Settings > Script Properties into the private Site secret GOOGLE_SCRIPT_SECRET. Deploy the web app and set GOOGLE_SCRIPT_URL. No schedules have been enabled.');
+ ensureDocumentSchedule_();
+ console.log('Setup complete. Copy SABUTH_SECRET from Project Settings > Script Properties into the private Site secret GOOGLE_SCRIPT_SECRET. Deploy the web app and set GOOGLE_SCRIPT_URL. Status-document work is scheduled for 11 PM IST.');
 }
 function doGet(){return json_({ok:false,error:'Sabuth requires authenticated POST requests.'})}
 function doPost(e){let lock;try{
@@ -32,7 +34,8 @@ function doPost(e){let lock;try{
  const cache=CacheService.getScriptCache();if(cache.get(req.nonce))throw Error('Request already received.');cache.put(req.nonce,'1',240);
  lock=LockService.getScriptLock();if(!lock.tryLock(10000))throw Error('Another update is in progress. Try again.');
  const book=SpreadsheetApp.openById(BOOK_ID);schema_(book);requireOperational_(book);let result;
- switch(req.action){case'addClient':result=addClient_(book,req.payload,req.actor);break;case'read':result=read_(book,req.payload.date);break;case'update':result=update_(book,req.payload,req.actor);break;case'create':result=create_(book,req.payload,req.actor);break;case'prepareMorning':result=prepare_(book,req.payload.date,req.actor);break;case'sendMorning':result=send_(book,req.payload.date,'morning',req.actor);break;case'sendEvening':result=send_(book,req.payload.date,'evening',req.actor);break;case'configureSchedule':result=schedule_(!!req.payload.enabled);break;default:throw Error('Unknown action.');}
+ switch(req.action){case'addClient':result=addClient_(book,req.payload,req.actor);break;case'read':result=read_(book,req.payload.date);break;case'update':result=update_(book,req.payload,req.actor);break;case'create':result=create_(book,req.payload,req.actor);break;case'markReviewed':result=markReviewed_(book,req.payload,req.actor);break;case'prepareMorning':result=prepare_(book,req.payload.date,req.actor);break;case'sendMorning':result=send_(book,req.payload.date,'morning',req.actor);break;case'sendEvening':result=send_(book,req.payload.date,'evening',req.actor);break;case'configureSchedule':result=schedule_(!!req.payload.enabled);break;default:throw Error('Unknown action.');}
+ if(req.action==='create'||req.action==='update')try{ensureDocumentSchedule_()}catch(scheduleError){console.warn('Document schedule needs authorization: '+scheduleError.message)}
  return json_({ok:true,data:result});
  }catch(err){return json_({ok:false,error:String(err.message||err)})}finally{if(lock)lock.releaseLock()}}
 function json_(value){return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON)}
@@ -61,14 +64,17 @@ function operational_(book,name,headers){let s=book.getSheetByName(name);if(!s){
 function requireOperational_(book){['Sabuth Activity','Sabuth Morning Lists','Sabuth Runs'].forEach(n=>{if(!book.getSheetByName(n))throw Error('Run setupSabuth in Google Apps Script first.')})}
 function rows_(s,n){return s.getLastRow()<2?[]:s.getRange(2,1,s.getLastRow()-1,n).getDisplayValues().map((r,i)=>({row:i+2,v:r}))}
 function richLink_(s,row,col,value){const rich=s.getRange(row,col).getRichTextValue();const formula=s.getRange(row,col).getFormula();const link=rich&&rich.getLinkUrl();if(link)return link;const match=formula.match(/^=HYPERLINK\("([^"]+)"/i);return match?match[1]:value}
-function matters_(book){const s=book.getSheetByName('Case Register');const headers=s.getRange(1,1,1,s.getLastColumn()).getDisplayValues()[0];const result=rows_(s,s.getLastColumn()).filter(r=>r.v[0]||r.v[1]).map(r=>{const v=r.v,doc=richLink_(s,r.row,14,v[13]),folder=richLink_(s,r.row,13,v[12]);const issues=[];if(!v[0]||!v[2])issues.push('Matter identity is incomplete');if(/[?]|verify|unclear|confirmation|unconfirmed/i.test(v[1]+' '+v[3]+' '+v[4])||!v[3])issues.push('Details need confirmation');if(v[7]&&!iso_(v[7]))issues.push('Next hearing date is unclear');if(!docId_(doc))issues.push('Current Status document link is missing or invalid');const previousDate=v[headers.indexOf('Previous Date')],created=v[headers.indexOf('Created Date')];return{previousDate:iso_(previousDate),created:timestampISO_(created)||created,row:r.row,key:key_(v[0],v[4]||v[2]),id:v[0],client:v[1],matter:v[2],court:v[3],caseNo:v[4]||v[2],advocate:v[6],nextDate:iso_(v[7]),stage:v[8],updated:timestampISO_(v[11])||v[11],folder,doc,version:fingerprint_(v),issues,raw:v}});const counts={};result.forEach(m=>counts[m.key]=(counts[m.key]||0)+1);result.forEach(m=>{if(counts[m.key]>1)m.issues.push('Duplicate matter identity — update blocked')});return result}
+function matters_(book){const s=book.getSheetByName('Case Register');const headers=s.getRange(1,1,1,s.getLastColumn()).getDisplayValues()[0];const result=rows_(s,s.getLastColumn()).filter(r=>r.v[0]||r.v[1]).map(r=>{const v=r.v,doc=richLink_(s,r.row,14,v[13]),folder=richLink_(s,r.row,13,v[12]);const issues=[];if(!v[0]||!v[2])issues.push('Matter identity is incomplete');if(/[?]|verify|unclear|confirmation|unconfirmed/i.test(v[1]+' '+v[3]+' '+v[4])||!v[3])issues.push('Details need confirmation');if(v[7]&&!iso_(v[7]))issues.push('Next hearing date is unclear');const previousDate=v[headers.indexOf('Previous Date')],created=v[headers.indexOf('Created Date')];return{previousDate:iso_(previousDate),created:timestampISO_(created)||created,row:r.row,key:key_(v[0],v[4]||v[2]),id:v[0],client:v[1],matter:v[2],court:v[3],caseNo:v[4]||v[2],advocate:v[6],nextDate:iso_(v[7]),stage:v[8],updated:timestampISO_(v[11])||v[11],folder,doc,version:fingerprint_(v),issues,raw:v}});const counts={};result.forEach(m=>counts[m.key]=(counts[m.key]||0)+1);result.forEach(m=>{if(counts[m.key]>1)m.issues.push('Duplicate matter identity — update blocked')});return result}
 function daily_(book,date,matters){return rows_(book.getSheetByName('Daily Court List'),14).filter(r=>iso_(r.v[0])===date).map(r=>{const v=r.v,matches=matters.filter(m=>m.id===v[7]&&caseMatch_(v[3],m.caseNo)==='exact'),m=matches.length===1?matches[0]:null,key=m?m.key:key_(v[7],v[3]);return{row:r.row,key,date,previousDate:iso_(v[1])||v[1],court:v[2],caseNo:v[3],client:v[4],stage:v[5],id:v[7],nextDate:iso_(v[10]),notes:v[13],doc:m?m.doc:'',raw:v}})}
 function snapshots_(book,date){return rows_(book.getSheetByName('Sabuth Morning Lists'),5).filter(r=>iso_(r.v[0])===date).sort((a,b)=>+a.v[1]- +b.v[1]).map(r=>({...JSON.parse(r.v[3]),nextDate:iso_(r.v[4]),snapshotRow:r.row}))}
 function run_(book,date){const s=book.getSheetByName('Sabuth Runs');const r=rows_(s,5).find(r=>iso_(r.v[0])===date);return r||null}
 function ensureRun_(book,date){let r=run_(book,date);if(!r){const s=book.getSheetByName('Sabuth Runs');s.appendRow([dateText_(date),'Not prepared','Not sent','','']);r=run_(book,date)}return r}
 function publicMatter_(m){const{row,raw,...rest}=m;return rest}
 function publicList_(r){const{row,raw,snapshotRow,...rest}=r;return rest}
-function read_(book,date){needDate_(date);const ms=matters_(book),run=run_(book,date);return{connected:true,date,clients:clients_(book),caseIndex:caseIndex_(book,ms),matters:ms.map(publicMatter_),listings:daily_(book,date,ms).map(publicList_),snapshot:run&&['Prepared','Sending','Sent','Send uncertain'].includes(run.v[1])?snapshots_(book,date).map(publicList_):null,activity:rows_(book.getSheetByName('Sabuth Activity'),7).slice(-100).reverse().map(r=>{let p={};try{p=JSON.parse(r.v[5])}catch{}return{id:r.v[0],time:timestampISO_(r.v[1])||r.v[1],actor:r.v[2],client:p.client||'',matter:p.matter||'',description:r.v[6]||p.description||r.v[3],status:r.v[4]}}),morningState:run?run.v[1]:'Not prepared',eveningState:run?run.v[2]:'Not sent',checkedAt:new Date().toISOString(),recipient:RECIPIENT,automation:PropertiesService.getScriptProperties().getProperty('AUTOMATION')==='true'}}
+function reviews_(book){const s=book.getSheetByName('Sabuth Reviews');if(!s)return{};return rows_(s,REVIEW_HEADERS.length).reduce((result,r)=>{result[r.v[0]]={row:r.row,issueFingerprint:r.v[1],reviewedBy:r.v[2],reviewedAt:timestampISO_(r.v[3])||r.v[3],status:r.v[4]};return result},{})}
+function reviewedMatter_(m,reviews){const review=reviews[m.key],matches=review&&review.status==='Reviewed'&&review.issueFingerprint===fingerprint_(m.issues);return{...m,reviewStatus:matches?'reviewed':m.issues.length?'needs_review':'clear',reviewedBy:matches?review.reviewedBy:'',reviewedAt:matches?review.reviewedAt:''}}
+function read_(book,date){needDate_(date);const ms=matters_(book),reviewMap=reviews_(book),run=run_(book,date);return{connected:true,date,clients:clients_(book),caseIndex:caseIndex_(book,ms),matters:ms.map(m=>publicMatter_(reviewedMatter_(m,reviewMap))),listings:daily_(book,date,ms).map(publicList_),snapshot:run&&['Prepared','Sending','Sent','Send uncertain'].includes(run.v[1])?snapshots_(book,date).map(publicList_):null,activity:rows_(book.getSheetByName('Sabuth Activity'),7).slice(-100).reverse().map(r=>{let p={};try{p=JSON.parse(r.v[5])}catch{}return{id:r.v[0],time:timestampISO_(r.v[1])||r.v[1],actor:r.v[2],client:p.client||'',matter:p.matter||'',description:r.v[6]||p.description||r.v[3],status:r.v[4]}}),morningState:run?run.v[1]:'Not prepared',eveningState:run?run.v[2]:'Not sent',checkedAt:new Date().toISOString(),recipient:RECIPIENT,automation:PropertiesService.getScriptProperties().getProperty('AUTOMATION')==='true'}}
+function markReviewed_(book,p,actor){needDate_(p.date);const matter=uniqueMatter_(book,clean_(p.key,500));if(!matter.issues.length)return{workspace:read_(book,p.date),alreadyClear:true};const s=operational_(book,'Sabuth Reviews',REVIEW_HEADERS),stamp=timestampText_(new Date()),fingerprint=fingerprint_(matter.issues),existing=rows_(s,REVIEW_HEADERS.length).find(r=>r.v[0]===matter.key);if(existing)s.getRange(existing.row,1,1,5).setValues([[matter.key,fingerprint,cell_(actor),stamp,'Reviewed']]);else s.appendRow([matter.key,fingerprint,cell_(actor),stamp,'Reviewed']);SpreadsheetApp.flush();return{workspace:read_(book,p.date),reviewedBy:actor,reviewedAt:timestampISO_(stamp)||stamp}}
 function docId_(link){const m=String(link).match(/^https:\/\/docs\.google\.com\/document\/d\/([A-Za-z0-9_-]+)/);return m?m[1]:''}
 function verifyDoc_(m){const id=docId_(m.doc);if(!id)throw Error(m.client+': Current Status document is missing.');const doc=DocumentApp.openById(id);const text=normal_(doc.getName()+' '+doc.getBody().getText());const number=normal_(m.caseNo||m.matter).replace(/^osno/,'os');if(!number||(!text.includes(number)&&!text.replace(/osno/g,'os').includes(number)))throw Error(m.client+': status document does not identify '+m.matter+'. Confirm the link in the register.');return doc}
 function clean_(v,max){const s=String(v||'').trim();if(s.length>max)throw Error('A field exceeds its allowed length.');return s}
@@ -211,7 +217,7 @@ function updateClientSummary_(book,id,name,plan,stamp){
  if(plan.mode!=='evening'){s.getRange(row,3,1,4).setNumberFormat('@').setValues([[cell_(plan.stage||''),dateText_(plan.date),cell_(plan.source||''),cell_(plan.court||'')]])}
  s.getRange(row,8).setNumberFormat('@').setValue(stamp);
 }
-function savedResult_(book,plan,repeated){const result={status:'Complete',repeated,documentPending:true,date:plan.date};try{result.workspace=read_(book,plan.date)}catch(e){result.refreshWarning='Saved. The court list could not be refreshed yet.'}return result}
+function savedResult_(book,plan,repeated){return{status:'Complete',repeated,documentPending:true,date:plan.date}}
 function queueDocument_(book,j){
  try{const plan=JSON.parse(j.v[5]),s=book.getSheetByName('Sabuth Documents');if(!s)return;const prior=rows_(s,5).find(r=>r.v[0]===j.v[0]);if(!prior)s.appendRow([j.v[0],plan.key,'Pending','',timestampText_(new Date())]);}
  catch(e){console.warn('Document work will be recovered from the saved journal.');}
@@ -232,19 +238,21 @@ function sabuthDocumentTick(){
  const lock=LockService.getScriptLock();if(!lock.tryLock(1000))return;
  try{firmAccount_();const book=SpreadsheetApp.openById(BOOK_ID);schema_(book);const sheet=book.getSheetByName('Sabuth Documents');if(!sheet)return;
  const journals=rows_(book.getSheetByName('Sabuth Activity'),7).filter(j=>['Hearing update','New matter'].includes(j.v[3])&&j.v[4]==='Complete');journals.forEach(j=>queueDocument_(book,j));
- rows_(sheet,5).filter(r=>r.v[2]==='Pending').slice(0,5).forEach(r=>{
+ const errors=[];rows_(sheet,5).filter(r=>r.v[2]==='Pending').slice(0,20).forEach(r=>{
   try{const j=journals.find(j=>j.v[0]===r.v[0]);if(!j)throw Error('The saved operation is not available.');const p=JSON.parse(j.v[5]),m=uniqueMatter_(book,p.key),doc=documentForMatter_(book,m),marker='[Sabuth update '+j.v[0]+']';
    if(!doc.getBody().getText().includes(marker)){doc.getBody().appendParagraph('Previous Date: '+dateText_(p.date)+'. Reported Hearing Date: '+dateText_(p.nextDate)+'.');if(p.stage)doc.getBody().appendParagraph('Stage / purpose: '+p.stage);if(p.source)doc.getBody().appendParagraph('Source: '+p.source);doc.getBody().appendParagraph(marker);doc.saveAndClose()}
    sheet.getRange(r.row,3,1,3).setValues([['Complete','',timestampText_(new Date())]]);
-  }catch(e){sheet.getRange(r.row,3,1,3).setValues([['Needs review',cell_(String(e.message)),timestampText_(new Date())]])}
+  }catch(e){const message=String(e.message||e);errors.push(message);sheet.getRange(r.row,3,1,3).setValues([['Needs review',cell_(message),timestampText_(new Date())]])}
  });
+ if(errors.length)try{MailApp.sendEmail({to:RECIPIENT,subject:'Sabuth document processing needs review',body:errors.join('\n')})}catch(mailError){console.warn('Document error email could not be sent: '+mailError.message)}
  }finally{lock.releaseLock()}
 }
+function ensureDocumentSchedule_(){const props=PropertiesService.getScriptProperties();if(props.getProperty('SABUTH_DOCUMENT_SCHEDULE_VERSION')==='2'&&ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==='sabuthDocumentTick'))return;ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='sabuthDocumentTick').forEach(t=>ScriptApp.deleteTrigger(t));ScriptApp.newTrigger('sabuthDocumentTick').timeBased().atHour(23).everyDays(1).inTimezone(TZ).create();props.setProperty('SABUTH_DOCUMENT_SCHEDULE_VERSION','2')}
 function migrateSabuth(){
  firmAccount_();const lock=LockService.getScriptLock();lock.waitLock(20000);
  try{
  const props=PropertiesService.getScriptProperties(),book=SpreadsheetApp.openById(BOOK_ID);schema_(book);
- if(props.getProperty('SABUTH_DATA_FIX_VERSION')==='1'){console.log('Data fixes already installed.');return}
+ ensureDocumentSchedule_();if(props.getProperty('SABUTH_DATA_FIX_VERSION')==='1'){console.log('Data fixes already installed.');return}
  if(!props.getProperty('SABUTH_DATA_FIX_BACKUP')){const backup=DriveApp.getFileById(BOOK_ID).makeCopy('Sabuth backup before client/date fixes '+today_());props.setProperty('SABUTH_DATA_FIX_BACKUP',backup.getId())}
  const register=book.getSheetByName('Case Register'),daily=book.getSheetByName('Daily Court List');
  ensureColumns_(register,['Previous Date','Created Date','Source/Confirmation']);ensureColumns_(daily,['Last Updated','Created Date']);
@@ -266,7 +274,6 @@ function migrateSabuth(){
  clients.getRange(1,1,1,8).setFontWeight('bold').setBackground('#233a50').setFontColor('#ffffff');clients.setColumnWidth(1,150);clients.setColumnWidth(2,220);clients.setColumnWidths(3,6,190);clients.setFrozenRows(1);
  if(!clients.getFilter())clients.getRange(1,1,Math.max(2,clients.getLastRow()),8).createFilter();
  documents.setFrozenRows(1);
- if(!ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==='sabuthDocumentTick'))ScriptApp.newTrigger('sabuthDocumentTick').timeBased().everyMinutes(5).create();
  SpreadsheetApp.flush();props.setProperty('SABUTH_DATA_FIX_VERSION','1');console.log('Client and date fixes installed. Backup file ID: '+props.getProperty('SABUTH_DATA_FIX_BACKUP'));
  }finally{lock.releaseLock()}
 }

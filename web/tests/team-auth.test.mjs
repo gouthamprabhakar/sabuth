@@ -63,7 +63,7 @@ test('all workspace reads and mutations reject anonymous requests, including Cha
   const h=harness();await h.configure();
   const anonymous = new Request('https://sabuth.test/api/workspace', {headers:{'oai-authenticated-user-id':'spoofed','oai-authenticated-user-email':'someone@example.com'}});
   assert.equal((await h.workspace.GET(anonymous)).status,401);
-  for(const action of ['update','create','prepareMorning','sendMorning','sendEvening','configureSchedule'])assert.equal((await h.workspace.POST(h.request('POST',{action,payload:{}}))).status,401);
+  for(const action of ['update','create','markReviewed','prepareMorning','sendMorning','sendEvening','configureSchedule'])assert.equal((await h.workspace.POST(h.request('POST',{action,payload:{}}))).status,401);
   assert.equal(h.bridgeCalls.length,0);
 });
 test('authenticated updates use the session identity and reject cross-origin writes',async()=>{

@@ -34,9 +34,11 @@ test('new-client selection stays in the case form and does not call a separate s
 
 test('client choices stay closed until focus and close when focus leaves the picker',()=>{
  const form=fs.readFileSync('components/case-entry-form.tsx','utf8');
+ const page=fs.readFileSync('app/page.tsx','utf8');
  assert.match(form,/\[clientOpen,setClientOpen\]=useState\(false\)/);
  assert.match(form,/onFocus=\{\(\)=>setClientOpen\(true\)\}/);
  assert.match(form,/onBlur=\{event=>\{if\(!event\.currentTarget\.contains/);
+ assert.match(page,/onOpenAutoFocus=\{event=>event\.preventDefault\(\)\}/);
 });
 
 test('source is not shown in the form because the authenticated user is recorded by the server',()=>{
