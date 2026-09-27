@@ -8,7 +8,7 @@ The web app is private. Google Sheets remains the authoritative store. No AI ser
 2. Create a project named **Sabuth — Prabhakar Law Group**.
 3. Replace Code.gs with the supplied Code.gs. Under Project Settings enable the manifest, then replace appsscript.json with the supplied manifest. The timezone must be Asia/Kolkata.
 4. Run **setupSabuth**. Review Google's requested permissions yourself. The script requires access to the master spreadsheet, individual status documents, client folders, email sending, and its own schedule. Google grants broad Drive/Sheets scopes; the code confines operations to the configured register and referenced matter documents.
-5. Setup adds only three workflow tabs: Sabuth Activity, Sabuth Morning Lists, and Sabuth Runs. It does not rewrite either original tab or enable scheduled emails.
+5. Setup adds workflow tabs for activity, morning lists, scheduled runs, document jobs, and reviewed exceptions. It does not rewrite either original tab or enable scheduled emails. Status-document jobs run nightly at 11 PM IST.
 6. In Project Settings → Script Properties, copy **SABUTH_SECRET**. Keep this private.
 7. Deploy → New deployment → Web app. Execute as yourself. To allow the private app's server to call it, choose Anyone for endpoint access. The endpoint rejects every request without a valid timestamped HMAC signature. This is a security-sensitive setting: review it explicitly before deploying.
 8. Give the resulting `/exec` URL to the app maintainer. Store that as the private Site environment variable **GOOGLE_SCRIPT_URL**, and the secret as **GOOGLE_SCRIPT_SECRET**. Never place the secret in a chat message, URL, public file, or browser storage. Use the private secret-entry mechanism.
@@ -19,7 +19,7 @@ The web app is private. Google Sheets remains the authoritative store. No AI ser
 
 - Read existing Case Register and Daily Court List, including linked Current Status documents.
 - Match using internal ID + matter number. Shared client IDs are not treated as unique matters.
-- Structured hearing updates, explicit dates and source notes, retry journal and read-back verification.
+- Structured hearing updates, explicit dates, login-attributed audit records, retry journal and read-back verification.
 - New matters under existing clients and new client folders with Current Status documents.
 - Morning cross-check and immutable snapshot; evening changes only the next date.
 - Morning and evening email previews, missing-date flags, and a send-state guard against automatic duplicate sends.
@@ -42,4 +42,4 @@ App name: sabuth. The Verisign .com registry returned no registration record for
 
 After replacing Code.gs, run `migrateSabuth` once under the firm account before deploying a new version of the existing web app. It creates a backup, adds the eight-column Clients tab and a document-work queue, appends Previous Date and creation/save timestamp columns, and formats unambiguous dates. Existing register columns and locked morning snapshots remain in place. Legacy timestamps without journal evidence are not invented.
 
-Case saves return their refreshed court list. Status documents are processed by `sabuthDocumentTick` every five minutes; failures appear separately in the Sabuth Documents tab and do not invalidate a case save. Source/Confirmation and Court Hall are optional. UI dates use dd/mm/yyyy; sheet and document dates use dd-MMM-yyyy, with clock time and IST retained for actual save timestamps.
+Case saves return immediately after the Google Sheet write. Status documents are processed by `sabuthDocumentTick` nightly at 11 PM IST; failures appear separately in the Sabuth Documents tab, are emailed to the firm account, and do not invalidate a case save. The signed-in username is recorded automatically. Court Hall is optional. UI dates use dd/mm/yyyy; sheet and document dates use dd-MMM-yyyy, with clock time and IST retained for actual save timestamps.

@@ -61,7 +61,7 @@ export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Pro
    if(!newClient&&matches.length){setPopup(true);return}
   }
   if(!validDate(previousDate)||!validDate(reportedDate)){setError('Choose both hearing dates.');return}
-  if(reportedDate<previousDate){setError('Reported Hearing Date must be on or after Previous Date.');return}
+  if(reportedDate<previousDate){setError('Next Hearing Date must be on or after Previous Date.');return}
   if(newClient){
    const normalized=clientName.replace(/[^a-z0-9]/gi,'').toLowerCase();
    if(!normalized){setError('Enter the client’s name.');return}
@@ -104,13 +104,13 @@ export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Pro
   <div className="input-step"><span>3</span><strong>Confirm the hearing details</strong></div>
   <div className="form-grid">
    <div><label>Previous Date *</label><DateInput label="Previous Date" value={previousDate} disabled={evening} invalid={attempted&&invalid.previous} onChange={value=>{setPreviousDate(value);setReview(false)}}/></div>
-   <div><label>Reported Hearing Date *</label><DateInput label="Reported Hearing Date" value={reportedDate} invalid={attempted&&invalid.reported} onChange={value=>{setReportedDate(value);setReview(false)}}/></div>
+   <div><label>Next Hearing Date *</label><DateInput label="Next Hearing Date" value={reportedDate} invalid={attempted&&invalid.reported} onChange={value=>{setReportedDate(value);setReview(false)}}/></div>
   </div>
   {!evening&&<>
    <label>Stage / purpose *<Input aria-invalid={attempted&&invalid.stage} list="stage-options" value={stage} onChange={e=>{setStage(e.target.value);setReview(false)}} placeholder="Select or enter the confirmed stage" maxLength={200}/><datalist id="stage-options">{stages.map(s=><option key={s} value={s}/>)}</datalist></label>
    {!selected&&<label>Court hall (optional)<Input value={court} onChange={e=>{setCourt(e.target.value);setReview(false)}} placeholder="Leave blank if unconfirmed" maxLength={100}/></label>}
   </>}
-  {review&&<div className="save-review"><strong>Review before saving</strong><p>{selected?.client||currentClient?.name||clientName} · {selected?.caseNo||caseText}</p><p>Previous Date: {displayDate(previousDate)}</p><p>Reported Hearing Date: {displayDate(reportedDate)}</p>{!evening&&<p>Stage: {stage||'Not specified'}</p>}</div>}
+  {review&&<div className="save-review"><strong>Review before saving</strong><p>{selected?.client||currentClient?.name||clientName} · {selected?.caseNo||caseText}</p><p>Previous Date: {displayDate(previousDate)}</p><p>Next Hearing Date: {displayDate(reportedDate)}</p>{!evening&&<p>Stage: {stage||'Not specified'}</p>}</div>}
   <Button type="submit" disabled={busy}>{busy?<Loader2 className="spin"/>:<Check/>}{busy?'Saving…':review?'Confirm and save':'Review update'}</Button>
  </form>
  <AlertDialog open={popup} onOpenChange={setPopup}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{matches.length===1?'This case already exists':'Choose the existing case'}</AlertDialogTitle><AlertDialogDescription>{matches.length===1?`${matches[0].caseNo} already exists for ${currentClient?.name}. Do you want to update it?`:`More than one existing record matches ${caseText}. Choose the correct case.`}</AlertDialogDescription></AlertDialogHeader>
