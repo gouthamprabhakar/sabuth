@@ -1,45 +1,89 @@
-# Sabuth · Connect Google Sheets
+# LawPal · Google Sheets and Drive bridge
 
-The web app is private. Google Sheets remains the authoritative store. No AI service is used.
+Google Sheets is LawPal's production case database. Google Drive stores the
+client folders and status-history documents. No AI service is used for normal
+reads or saves.
 
-## One-time authorization
+## Existing production resources
 
-1. Sign into Google Apps Script with **prabhakarlawgroup@gmail.com**.
-2. Create a project named **Sabuth — Prabhakar Law Group**.
-3. Replace Code.gs with the supplied Code.gs. Under Project Settings enable the manifest, then replace appsscript.json with the supplied manifest. The timezone must be Asia/Kolkata.
-4. Run **setupSabuth**. Review Google's requested permissions yourself. The script requires access to the master spreadsheet, individual status documents, client folders, email sending, and its own schedule. Google grants broad Drive/Sheets scopes; the code confines operations to the configured register and referenced matter documents.
-5. Setup adds workflow tabs for activity, morning lists, scheduled runs, document jobs, and reviewed exceptions. It does not rewrite either original tab or enable scheduled emails. Status-document jobs run nightly at 11 PM IST.
-6. In Project Settings → Script Properties, copy **SABUTH_SECRET**. Keep this private.
-7. Deploy → New deployment → Web app. Execute as yourself. To allow the private app's server to call it, choose Anyone for endpoint access. The endpoint rejects every request without a valid timestamped HMAC signature. This is a security-sensitive setting: review it explicitly before deploying.
-8. Give the resulting `/exec` URL to the app maintainer. Store that as the private Site environment variable **GOOGLE_SCRIPT_URL**, and the secret as **GOOGLE_SCRIPT_SECRET**. Never place the secret in a chat message, URL, public file, or browser storage. Use the private secret-entry mechanism.
-9. Refresh Sabuth and verify the register and a known listing. Use a separate copy and test account for write verification before enabling production writes or email schedules.
-10. In Sabuth → Workspace settings, enable daily emails only after the connection and write tests pass. Recipient: **prabhakarlawgroup@gmail.com**. The five-minute Google trigger targets 7 AM and 7 PM IST but is not exact-time delivery.
+- Master spreadsheet: `MASTER CASE REGISTER - PROTOTYPE`
+- Spreadsheet ID: `1VgPwvFufx8UBz5JKMpZDWjJ9Z6FVoR9H73R9eDEC1u0`
+- Apps Script project: the existing project under
+  `prabhakarlawgroup@gmail.com`
+- Client-folder root: configured as `ACTIVE_FOLDER` in `Code.gs`
+- Legacy recovery backup: `Sabuth backup before simplified workflow 2026-09-28`
 
-## What is ready
+The public app name is LawPal. Existing `Sabuth Activity`, `Sabuth Documents`
+and `Sabuth Reviews` sheet names and the `SABUTH_SECRET` environment name are
+retained as internal compatibility identifiers.
 
-- Read existing Case Register and Daily Court List, including linked Current Status documents.
-- Match using internal ID + matter number. Shared client IDs are not treated as unique matters.
-- Structured hearing updates, explicit dates, login-attributed audit records, retry journal and read-back verification.
-- New matters under existing clients and new client folders with Current Status documents.
-- Morning cross-check and immutable snapshot; evening changes only the next date.
-- Morning and evening email previews, missing-date flags, and a send-state guard against automatic duplicate sends.
+## One-time authorization or a fresh installation
+
+1. Sign into Google Apps Script as `prabhakarlawgroup@gmail.com`.
+2. Open the existing Apps Script project. For a fresh copy, create a project
+   named `LawPal — Prabhakar Law Group`.
+3. Replace `Code.gs` and `appsscript.json` with the repository versions. The
+   project timezone must be `Asia/Kolkata`.
+4. Run `setupLawPal`. The older `setupSabuth` function remains as a compatible
+   alias. Review Google's requested permissions yourself.
+5. Store the generated `SABUTH_SECRET` Script Property securely. It must match
+   the website secret named `GOOGLE_SCRIPT_SECRET`.
+6. Update the existing web-app deployment with a new version. Preserve its
+   deployment ID, Execute as Me setting and current access setting so the
+   `/exec` URL does not change.
+
+## Current data model
+
+`Case Register` is the complete list of matters. Each row is one case. A matter
+is uniquely matched by Internal Case ID plus normalized case number, so one
+client ID may correctly own several cases. The client selector and Case
+Register screen are built from this complete tab.
+
+`Daily Court List` is the dated index used by the home screen. Hearing Date is
+the date on which that row appears. Previous Date may be empty. Next Hearing in
+`Case Register` is also consulted, so a case still appears on its current next
+date if its daily-list row is missing.
+
+`Clients` is a helper search index. It is not the authoritative list of cases.
+`Sabuth Activity` is the save journal. `Sabuth Documents` is the status-document
+queue. `Sabuth Reviews` stores review acknowledgements. `Sabuth Morning Lists`
+and `Sabuth Runs` are retained legacy tabs and are not used by the current app.
+
+Every save performs these steps synchronously:
+
+1. Update the current values in `Case Register`.
+2. Add or update the row for the Next Hearing date in `Daily Court List`.
+3. Refresh the client's helper row in `Clients`.
+4. Write the signed-in username and operation to `Sabuth Activity`.
+5. Queue the client-document update in `Sabuth Documents`.
+
+The save returns after the Sheet writes. `sabuthDocumentTick` runs once each
+night at 11 PM IST and appends pending updates to the correct client status
+document while preserving the existing table. A document error is recorded in
+`Sabuth Documents` and does not undo the Sheet save.
+
+## Restoring the older register
+
+The first simplified-schema migration created the backup spreadsheet before it
+changed the live columns. Some older Case Register rows were absent from the
+live simplified register afterward. Run `migrateLawPal` to repair this safely.
+
+The recovery reads the backup, compares Internal Case ID plus normalized case
+number, and appends only cases missing from the live register. It never replaces
+a matching live row, so current hearing dates and newer app-entered cases win.
+The function also labels column J as `Status Document`, installs the 11 PM IST
+document trigger and records data-model version 2. It is safe to rerun.
+
+After migration, verify a known multi-case client such as Yani Dasoor in the
+app. Selecting Yani Dasoor must show `Crl. Misc. 163/12`.
 
 ## Operational limits
 
-- The original register has no active/closed status column. All populated records participate in the morning Next Hearing check. Archive closed cases or add an explicit status mapping before mixing closed and active cases.
-- Direct edits in Google Sheets do not acquire the app's lock. App users are serialized; external editors can still race. Avoid editing the same matter in Sheets while an app update is running. Changes detected by read-back are flagged.
-- An existing daily-list row with no unique register match blocks preparation; use New matter or repair the matching record explicitly.
-- A partial operation remains in Sabuth Activity as Needs review. Retry the same request with the same request ID from the still-open form. After a refresh, the maintainer must inspect its recorded plan and affected records before completing recovery; do not mark it Complete without verification.
-- A failed/uncertain email is never automatically resent. Check Sent mail, then a maintainer can correct the Sabuth Runs state after confirming what happened.
-- These steps need real Google authorization and sandbox integration tests. Local tests alone do not prove Google deployment or delivery.
-- This is a browser-installed PWA for iPhone and Android. App Store and Play Store packages are not included.
-
-## Name
-
-App name: sabuth. The Verisign .com registry returned no registration record for sabuth.com on 25 September 2026. Registrar confirmation is pending. No domain has been bought or connected.
-
-## Client and date fixes (September 2026)
-
-After replacing Code.gs, run `migrateSabuth` once under the firm account before deploying a new version of the existing web app. It creates a backup, adds the eight-column Clients tab and a document-work queue, appends Previous Date and creation/save timestamp columns, and formats unambiguous dates. Existing register columns and locked morning snapshots remain in place. Legacy timestamps without journal evidence are not invented.
-
-Case saves return immediately after the Google Sheet write. Status documents are processed by `sabuthDocumentTick` nightly at 11 PM IST; failures appear separately in the Sabuth Documents tab, are emailed to the firm account, and do not invalidate a case save. The signed-in username is recorded automatically. Court Hall is optional. UI dates use dd/mm/yyyy; sheet and document dates use dd-MMM-yyyy, with clock time and IST retained for actual save timestamps.
+- Avoid editing the same matter directly in Sheets while a LawPal save is in
+  progress. App saves use a lock; direct spreadsheet edits do not.
+- `Case Register` has no active/closed field. Every populated row appears in the
+  register until an explicit archive model is added.
+- A partial operation remains in `Sabuth Activity` as `Needs review`; inspect its
+  saved plan before completing any manual recovery.
+- This is a browser-installed PWA for Android and iPhone. Native App Store and
+  Play Store packages are not included.

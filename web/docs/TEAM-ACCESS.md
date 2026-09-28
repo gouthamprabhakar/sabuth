@@ -1,8 +1,8 @@
-# Sabuth team sign-in
+# LawPal team sign-in
 
 Five equal-access accounts are supported: Prabhakar, Preetham, Raghu, Junior2 and Junior3. Usernames ignore case and surrounding spaces. Passwords are case-sensitive. Initial passwords were supplied by the owner; they are not stored in source code or this document.
 
-The login page is accessible without a ChatGPT account. Every workspace API read and write requires a valid Sabuth session. The server supplies the username to the existing Google bridge for its Activity journal. Direct Google Sheets/Drive links still follow Google's existing permissions.
+The login page is accessible without a ChatGPT account. Every workspace API read and write requires a valid LawPal session. The server supplies the username to the existing Google bridge for its Activity journal. Direct Google Sheets/Drive links still follow Google's existing permissions.
 
 ## Storage and sessions
 

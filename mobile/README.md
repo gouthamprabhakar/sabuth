@@ -1,6 +1,6 @@
 # Mobile application
 
-Sabuth currently ships as the responsive browser-installed PWA in `../web`.
+LawPal currently ships as the responsive browser-installed PWA in `../web`.
 There is no React Native source in the existing production application, so no
 mobile implementation has been invented during this source migration.
 

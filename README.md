@@ -1,6 +1,6 @@
-# Sabuth
+# LawPal
 
-This repository is the editable source for the Sabuth legal case-management
+This repository is the editable source for the LawPal legal case-management
 application used by Prabhakar Law Group. Google Sheets and Google Drive remain
 the production case-data backend. This migration does not move production data
 to Firebase and does not replace the existing `sabuth.gaut90.chatgpt.site`
@@ -18,6 +18,58 @@ deployment.
 The source snapshot was copied from the application checkout at commit
 `3bbc8dc6ae623504d14281dc387091b31c585044`. Generated folders, installed
 dependencies, local databases, and secrets are intentionally excluded.
+
+## Production data model
+
+LawPal uses one Google spreadsheet as its production database:
+[MASTER CASE REGISTER - PROTOTYPE](https://docs.google.com/spreadsheets/d/1VgPwvFufx8UBz5JKMpZDWjJ9Z6FVoR9H73R9eDEC1u0/edit).
+The app does not keep a separate copy of case data in the website database.
+The website database is used only for the five staff login sessions.
+
+| Google Sheet tab | What it stores | Where LawPal uses it |
+| --- | --- | --- |
+| `Case Register` | One row per case, including client ID/name, case number, court, current next hearing, stage, previous date, folder link, status-document link, sync state and timestamps | The Case Register screen and the existing-case choices in Add Update |
+| `Daily Court List` | One row for a case on a specific hearing date | The home-screen court list for the selected date |
+| `Clients` | A helper index of client IDs and names plus the latest stage, previous date, court and timestamps | Client-name search; Case Register is also read so an older client still appears even if this helper tab has no row |
+| `Sabuth Activity` | Append-only save journal with request ID, user, action, status and recovery details | Activity screen, duplicate-save protection and document-sync recovery |
+| `Sabuth Documents` | Queue of saved updates waiting to be written to client status documents | The 11 PM IST document sync |
+| `Sabuth Reviews` | Records that a user acknowledged a flagged or incomplete matter | Needs Review screen |
+| `Sabuth Morning Lists` and `Sabuth Runs` | Legacy scheduler data | Retained for history; the current LawPal workflow does not use them |
+
+The `Sabuth ...` tab names are intentionally retained because they are internal
+production identifiers. Renaming those tabs would break deployed code and does
+not affect the LawPal name shown to users.
+
+### How records reach each screen
+
+On every read, the Google Apps Script bridge loads every non-empty row in
+`Case Register`. A case is identified by the combination of its Internal Case
+ID and normalized case number. One client ID may therefore have several cases.
+The client selector is built from those register rows plus the `Clients` helper
+tab. After a client is selected, LawPal filters the complete register by that
+client ID and shows all matching cases.
+
+For the Court Diary, the bridge first loads rows in `Daily Court List` whose
+Hearing Date equals the date selected in the app. It also includes any register
+case whose current Next Hearing equals that date, which keeps the diary usable
+if a dated index row is missing. The Case Register screen always comes from the
+complete `Case Register` tab and is not limited to the selected diary date.
+
+Saving an update immediately writes the latest values to `Case Register`, adds
+or updates the dated row in `Daily Court List`, refreshes the `Clients` helper
+row and records the operation in `Sabuth Activity`. It then adds a pending item
+to `Sabuth Documents`. At 11 PM IST, `sabuthDocumentTick` appends the update to
+the correct client's status document while preserving its existing table.
+Document-sync failure does not undo the successful Sheet save.
+
+### Legacy-data recovery
+
+Before the simplified column migration, Apps Script created the read-only
+spreadsheet `Sabuth backup before simplified workflow 2026-09-28`. The first
+simplified migration left many older rows only in that backup. The
+`migrateLawPal` recovery compares Internal Case ID plus case number, appends only
+missing legacy matters, and preserves newer rows and later app updates. Running
+it again is safe because the merge is idempotent.
 
 ## Prerequisites
 
@@ -37,7 +89,7 @@ cp .env.example .dev.vars
 ```
 
 Edit `web/.dev.vars` and replace all placeholders. Then initialize the local
-session database and start Sabuth:
+session database and start LawPal:
 
 ```bash
 npm run build
