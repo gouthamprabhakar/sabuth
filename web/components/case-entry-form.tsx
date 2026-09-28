@@ -6,11 +6,11 @@ import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {NativeSelect,NativeSelectOption} from '@/components/ui/native-select';
 import {AlertDialog,AlertDialogContent,AlertDialogHeader,AlertDialogTitle,AlertDialogDescription,AlertDialogFooter,AlertDialogCancel,AlertDialogAction} from '@/components/ui/alert-dialog';
-import {type Workspace,type Matter,displayDate,validDate} from '@/lib/domain';
+import {type Workspace,type Matter,displayDate,validDate,istToday} from '@/lib/domain';
 import {candidates,type CaseIndexEntry} from '@/lib/case-matching';
 import {CASE_TYPES,buildCaseNumber,digitsOnly} from '@/lib/case-types';
 import {clientById,hasExactClientName,matchingClients} from '@/lib/client-options';
-export type EntryPayload={date:string;listingDate:string;key:string;version:string;nextDate:string;stage:string;client:string;clientId:string;matter:string;court:string;mode:'evening'|'adhoc';requestId:string};
+export type EntryPayload={date:string;listingDate:string;key:string;version:string;nextDate:string;stage:string;client:string;clientId:string;matter:string;court:string;notes?:string;mode:'evening'|'adhoc';requestId:string};
 type Props={data:Workspace;seed?:Matter;date:string;evening:boolean;requestId:string;onSave:(action:'create'|'update',payload:EntryPayload)=>Promise<void>;busy:boolean};
 export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Props){
  const clients=useMemo(()=>Array.from(new Map([...data.matters.map(m=>({id:m.id,name:m.client})),...(data.clients||[])].map(c=>[c.id,{...c,label:c.name+' — '+c.id}])).values()).sort((a,b)=>a.name.localeCompare(b.name)),[data.matters,data.clients]);
@@ -25,7 +25,7 @@ export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Pro
  const [caseType,setCaseType]=useState('');
  const [number,setNumber]=useState('');
  const [suffix,setSuffix]=useState('');
- const [previousDate,setPreviousDate]=useState(date);
+ const [previousDate,setPreviousDate]=useState(seed?istToday():date);
  const [reportedDate,setReportedDate]=useState('');
  const [stage,setStage]=useState(seed?.stage||'');
  const [court,setCourt]=useState(seed?.court||'');
@@ -104,11 +104,11 @@ export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Pro
   <div className="input-step"><span>3</span><strong>Confirm the hearing details</strong></div>
   <div className="form-grid">
    <div><label>Previous Date (optional)</label><DateInput label="Previous Date" value={previousDate} disabled={evening} invalid={attempted&&invalid.previous} onChange={value=>{setPreviousDate(value);setReview(false)}}/><Button type="button" variant="outline" size="sm" disabled={evening} onClick={()=>{setPreviousDate('');setReview(false)}}>N/A</Button></div>
-   <div><label>Next Hearing Date *</label><DateInput label="Next Hearing Date" value={reportedDate} invalid={attempted&&invalid.reported} onChange={value=>{setReportedDate(value);setReview(false)}}/></div>
+   <div><label>Next Hearing Date *</label><DateInput label="Next Hearing Date" value={reportedDate} invalid={attempted&&invalid.reported} onChange={value=>{setReportedDate(value);if(selected?.nextDate&&value!==selected.nextDate)setPreviousDate(selected.nextDate);setReview(false)}}/></div>
   </div>
   {!evening&&<>
    <label>Stage / purpose *<Input aria-invalid={attempted&&invalid.stage} value={stage} onChange={e=>{setStage(e.target.value);setReview(false)}} placeholder="Type the stage or purpose" maxLength={200}/></label>
-   {!selected&&<label>Court hall (optional)<Input value={court} onChange={e=>{setCourt(e.target.value);setReview(false)}} placeholder="Leave blank if unconfirmed" maxLength={100}/></label>}
+   <label>Court hall (optional)<Input value={court} onChange={e=>{setCourt(e.target.value);setReview(false)}} placeholder="Leave blank if unconfirmed" maxLength={100}/></label>
   </>}
   {review&&<div className="save-review"><strong>Review before saving</strong><p>{selected?.client||currentClient?.name||clientName} · {selected?.caseNo||caseText}</p><p>Previous Date: {previousDate?displayDate(previousDate):'N/A'}</p><p>Next Hearing Date: {displayDate(reportedDate)}</p>{!evening&&<p>Stage: {stage||'Not specified'}</p>}</div>}
   <Button type="submit" disabled={busy}>{busy?<Loader2 className="spin"/>:<Check/>}{busy?'Saving…':review?'Confirm and save':'Review update'}</Button>
