@@ -36,6 +36,11 @@ function normalizeCaseNumber(value: string) {
 function courtCodeFor(court: string) {
   const value = court.toUpperCase();
 
+  // A numbered High Court hall is not part of the City Civil complex.
+  if (value.includes("HIGH COURT")) {
+    return undefined;
+  }
+
   // Current PLG Bengaluru City Civil matters.
   // We will expand this mapping as we verify additional courts.
   if (
