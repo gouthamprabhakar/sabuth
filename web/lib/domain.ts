@@ -1,6 +1,6 @@
 import type {CaseIndexEntry} from './case-matching';
 export type Client={id:string;name:string;stage?:string;previousDate?:string;source?:string;court?:string;created?:string;updated?:string};
-export type Matter={key:string;id:string;client:string;matter:string;court:string;caseNo:string;nextDate:string;stage:string;updated:string;folder:string;doc:string;advocate:string;version:string;issues:string[];previousDate?:string;created?:string;reviewStatus?:'clear'|'needs_review'|'reviewed';reviewedBy?:string;reviewedAt?:string};
+export type Matter={key:string;id:string;client:string;matter:string;court:string;caseNo:string;nextDate:string;stage:string;updated:string;folder:string;doc:string;advocate:string;version:string;issues:string[];previousDate?:string;created?:string;cnr?:string;reviewStatus?:'clear'|'needs_review'|'reviewed';reviewedBy?:string;reviewedAt?:string};
 export type Listing={key:string;date:string;previousDate:string;court:string;caseNo:string;client:string;stage:string;id:string;nextDate:string;notes:string;doc:string;missing?:boolean};
 export type Activity={id:string;time:string;client:string;matter:string;description:string;status:string};
 export type Workspace={connected:boolean;clients?:Client[];caseIndex?:CaseIndexEntry[];date:string;matters:Matter[];listings:Listing[];snapshot:Listing[]|null;activity:Activity[];morningState:string;eveningState:string;checkedAt:string;recipient:string;automation:boolean;error?:string};
