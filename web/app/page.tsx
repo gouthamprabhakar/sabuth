@@ -219,10 +219,7 @@ function App(){
   }
 
   function startUpdate(m?:Matter){
-    if(!data.connected){
-      navigate('settings');
-      return;
-    }
+    if(loading||!data.connected)return;
 
     setNewMatter(false);
     setSelected(m?.key||'');
@@ -347,7 +344,7 @@ function App(){
 
     try{
       await request('update',{
-        date:m.nextDate,
+        date,
         listingDate:date,
         key:m.key,
         version:m.version,
@@ -462,19 +459,17 @@ function App(){
 
               <TableCell>
                 <div className="client-row-title">
-                  <button
+                  {multiple&&<button
                     className="expand-row"
                     aria-label={(expanded?'Collapse ':'Expand ')+first.client}
-                    onClick={()=>
-                      setExpandedClients(old=>{
-                        const next=new Set(old);
-                        expanded?next.delete(first.id):next.add(first.id);
-                        return next;
-                      })
-                    }
+                    onClick={()=>setExpandedClients(old=>{
+                      const next=new Set(old);
+                      expanded?next.delete(first.id):next.add(first.id);
+                      return next;
+                    })}
                   >
                     {expanded?<ChevronDown size={16}/>:<ChevronRight size={16}/>}
-                  </button>
+                  </button>}
                   <strong>{first.client}</strong>
                 </div>
 
@@ -547,9 +542,11 @@ function App(){
                   </div>
                   :
                   !multiple&&
-                  <button
-                    className="row-action"
-                    aria-label={'Edit '+first.client+' '+first.caseNo}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="row-update"
+                    aria-label={'Update '+first.client+' '+first.caseNo}
                     onClick={()=>setInlineEdit({
                       key:first.key,
                       nextDate:first.nextDate,
@@ -558,8 +555,8 @@ function App(){
                       court:first.court||''
                     })}
                   >
-                    <ArrowUpRight size={17}/>
-                  </button>
+                    Update
+                  </Button>
                 }
               </TableCell>
             </TableRow>
@@ -673,7 +670,7 @@ function App(){
           </div>
 
           {view!=='settings'&&
-            <Button onClick={()=>startUpdate()} className="primary-button">
+            <Button onClick={()=>startUpdate()} disabled={loading||!data.connected} className="primary-button">
               <Plus/>Add update
             </Button>
           }

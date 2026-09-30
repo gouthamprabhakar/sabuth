@@ -104,7 +104,7 @@ export function CaseEntryForm({data,seed,date,evening,requestId,onSave,busy}:Pro
   <div className="input-step"><span>3</span><strong>Confirm the hearing details</strong></div>
   <div className="form-grid">
    <div><label>Previous Date (optional)</label><DateInput label="Previous Date" value={previousDate} disabled={evening} invalid={attempted&&invalid.previous} onChange={value=>{setPreviousDate(value);setReview(false)}}/><Button type="button" variant="outline" size="sm" disabled={evening} onClick={()=>{setPreviousDate('');setReview(false)}}>N/A</Button></div>
-   <div><label>Next Hearing Date *</label><DateInput label="Next Hearing Date" value={reportedDate} invalid={attempted&&invalid.reported} onChange={value=>{setReportedDate(value);if(selected?.nextDate&&value!==selected.nextDate)setPreviousDate(selected.nextDate);setReview(false)}}/></div>
+   <div><label>Next Hearing Date *</label><DateInput label="Next Hearing Date" value={reportedDate} invalid={attempted&&invalid.reported} onChange={value=>{setReportedDate(value);setReview(false)}}/></div>
   </div>
   {!evening&&<>
    <label>Stage / purpose *<Input aria-invalid={attempted&&invalid.stage} value={stage} onChange={e=>{setStage(e.target.value);setReview(false)}} placeholder="Type the stage or purpose" maxLength={200}/></label>

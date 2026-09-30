@@ -119,6 +119,7 @@ keys, local D1 files, and generated build output are ignored.
 | `GOOGLE_SCRIPT_URL` | `web/.dev.vars` | Cloudflare Worker secret | Apps Script web-app `/exec` URL |
 | `GOOGLE_SCRIPT_SECRET` | `web/.dev.vars` | Cloudflare Worker secret | Must equal Apps Script property `SABUTH_SECRET` |
 | `SABUTH_TEAM_CREDENTIALS` | `web/.dev.vars` | Cloudflare Worker secret | Locally generated JSON of salts and password hashes |
+| `ECOURTSINDIA_API_TOKEN` | `web/.dev.vars` | Server-side Site or Cloudflare Worker secret | eCourtsIndia Partner API token; never expose it to browser code |
 | `SABUTH_SECRET` | Never in this repository | Apps Script Project Settings → Script Properties | Private HMAC secret used by the bridge |
 
 Generate a fresh `SABUTH_TEAM_CREDENTIALS` JSON value locally:

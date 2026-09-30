@@ -39,8 +39,8 @@ function courtCodeFor(court: string) {
   // Current PLG Bengaluru City Civil matters.
   // We will expand this mapping as we verify additional courts.
   if (
-    value.includes("CH 44") ||
-    value.includes("CH44") ||
+    /\bCH\s*\d+\b/.test(value) ||
+    /\bCOURT\s*HALL\s*\d+\b/.test(value) ||
     value.includes("CITY CIVIL")
   ) {
     return "KABC01";
