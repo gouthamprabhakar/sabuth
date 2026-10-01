@@ -312,6 +312,24 @@ function App(){
     }
   }
 
+  async function reviewCourtSync(id:string,type:'updated'|'unchanged'|'error'){
+    setBusy(true);
+    setError('');
+
+    try{
+      const result=await request('reviewCourtSync',{id,date});
+      if(result.workspace)setData(result.workspace);
+      else await load(date,true);
+      toast.success(type==='error'?'Issue dismissed.':'Court change approved.');
+    }catch(e){
+      const message=(e as Error).message;
+      setError(message);
+      toast.error(message);
+    }finally{
+      setBusy(false);
+    }
+  }
+
   async function findCnr(m:Matter){
     setCnrSearching(true);
     setCnrError('');
@@ -1076,15 +1094,20 @@ function App(){
                       </p>
                       {change.cnr&&<small>CNR {change.cnr} · {displayTimestamp(change.time)}</small>}
                     </div>
-                    {linked&&
+                    <div className="inline-actions">
+                      {linked&&
+                        <Button variant="outline" size="sm" onClick={()=>setDetail(linked)}>
+                          View case
+                        </Button>
+                      }
                       <Button
-                        variant="outline"
                         size="sm"
-                        onClick={()=>setDetail(linked)}
+                        disabled={busy}
+                        onClick={()=>void reviewCourtSync(change.id,change.type)}
                       >
-                        Review details
+                        <Check/>{change.type==='error'?'Dismiss':'Approve change'}
                       </Button>
-                    }
+                    </div>
                   </div>;
                 })}
               </div>
