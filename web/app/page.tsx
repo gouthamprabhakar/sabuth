@@ -151,8 +151,25 @@ function App(){
   }
 
   const listings=data.listings;
-  const missing:Listing[]=[];
+  const missingCutoff=shiftDate(istToday(),-2);
+  const missing:Listing[]=data.matters
+    .filter(m=>validDate(m.nextDate)&&m.nextDate<=missingCutoff)
+    .map(m=>({
+      key:m.key,
+      date:m.nextDate,
+      previousDate:m.previousDate||'',
+      court:m.court,
+      caseNo:m.caseNo,
+      client:m.client,
+      stage:m.stage,
+      id:m.id,
+      nextDate:m.nextDate,
+      notes:'',
+      doc:m.doc,
+      missing:true
+    }));
   const review=data.matters.filter(m=>m.issues.length&&m.reviewStatus!=='reviewed');
+  const courtSync=data.courtSync||[];
 
   const filteredMatters=data.matters.filter(m=>
     [m.client,m.matter,m.id,m.court]
@@ -333,6 +350,38 @@ function App(){
       setCnrError((e as Error).message);
     }finally{
       setCnrSearching(false);
+    }
+  }
+
+  async function confirmCnr(m:Matter,candidate:CnrCandidate){
+    setBusy(true);
+    setCnrError('');
+
+    try{
+      const result=await request('setCnr',{
+        key:m.key,
+        version:m.version,
+        cnr:candidate.cnr,
+        date
+      });
+
+      if(result.workspace){
+        setData(result.workspace);
+        const saved=result.workspace.matters.find(item=>item.key===m.key);
+        if(saved)setDetail(saved);
+      }else{
+        await load(date,true);
+        setDetail(null);
+      }
+
+      setCnrCandidates([]);
+      toast.success('CNR linked to this matter.');
+    }catch(e){
+      const message=(e as Error).message;
+      setCnrError(message);
+      toast.error(message);
+    }finally{
+      setBusy(false);
     }
   }
 
@@ -612,8 +661,8 @@ function App(){
             >
               <Icon/>
               {names[v]}
-              {v==='review'&&(review.length+missing.length)>0&&
-                <span className="nav-count">{review.length+missing.length}</span>
+              {v==='review'&&(review.length+missing.length+courtSync.length)>0&&
+                <span className="nav-count">{review.length+missing.length+courtSync.length}</span>
               }
             </button>
           )}
@@ -714,8 +763,8 @@ function App(){
             </div>
             <div>
               <span>Needs review</span>
-              <strong className={review.length+missing.length?'attention':''}>
-                {data.connected?review.length+missing.length:'—'}
+              <strong className={review.length+missing.length+courtSync.length?'attention':''}>
+                {data.connected?review.length+missing.length+courtSync.length:'—'}
               </strong>
               <small>Unconfirmed details stay flagged</small>
             </div>
@@ -851,6 +900,7 @@ function App(){
                   <TableHeader>
                     <TableRow>
                       <TableHead>Client / matter</TableHead>
+                      <TableHead>CNR</TableHead>
                       <TableHead>Court hall</TableHead>
                       <TableHead>Next hearing</TableHead>
                       <TableHead>Stage</TableHead>
@@ -876,6 +926,23 @@ function App(){
                           <div className="case-meta">
                             {m.matter}<span> · {m.id}</span>
                           </div>
+                        </TableCell>
+
+                        <TableCell>
+                          {m.cnr?
+                            <span className="case-meta">{m.cnr}</span>
+                            :
+                            <button
+                              className="pending-date"
+                              onClick={()=>{
+                                setCnrError('');
+                                setCnrCandidates([]);
+                                setDetail(m);
+                              }}
+                            >
+                              Not linked
+                            </button>
+                          }
                         </TableCell>
 
                         <TableCell>{m.court||'Unconfirmed'}</TableCell>
@@ -946,7 +1013,7 @@ function App(){
                       <div className="review-icon"><CalendarDays size={19}/></div>
                       <div>
                         <h3>{r.client}</h3>
-                        <p>{r.caseNo} · Next date not received for {displayDate(date)}</p>
+                        <p>{r.caseNo} · Hearing date {displayDate(r.nextDate)} passed at least two days ago and has not been moved.</p>
                       </div>
                       <Button
                         variant="outline"
@@ -976,6 +1043,58 @@ function App(){
                     </div>
                   )}
                 </div>
+            }
+          </section>
+        }
+
+        {view==='review'&&data.connected&&
+          <section className="content-panel">
+            <div className="panel-title">
+              <div>
+                <h2>AI changes</h2>
+                <p className="case-meta">Automatic eCourts checks. This process does not use AI credits.</p>
+              </div>
+              <span>{courtSync.length} items</span>
+            </div>
+
+            {courtSync.length?
+              <div className="review-list">
+                {courtSync.map(change=>{
+                  const linked=data.matters.find(m=>m.key===change.key);
+                  return <div className="review-row" key={change.id}>
+                    <div className="review-icon">
+                      {change.type==='error'?<AlertCircle size={19}/>:<RefreshCw size={19}/>}
+                    </div>
+                    <div>
+                      <h3>{change.client||'eCourts sync issue'}</h3>
+                      <p>
+                        {change.matter&&`${change.matter} · `}
+                        {change.type==='updated'?
+                          `Next hearing ${displayDate(change.previousDate)} → ${displayDate(change.nextDate)}`
+                          :change.error||change.notes||'No LawPal record was changed.'
+                        }
+                      </p>
+                      {change.cnr&&<small>CNR {change.cnr} · {displayTimestamp(change.time)}</small>}
+                    </div>
+                    {linked&&
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={()=>setDetail(linked)}
+                      >
+                        Review details
+                      </Button>
+                    }
+                  </div>;
+                })}
+              </div>
+              :
+              <Empty>
+                <EmptyHeader>
+                  <EmptyTitle>No automatic court changes yet</EmptyTitle>
+                  <EmptyDescription>Changes and eCourts connection problems will appear here after the daily check.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             }
           </section>
         }
@@ -1246,7 +1365,10 @@ function App(){
                     Not this case
                   </Button>
 
-                  <Button disabled>
+                  <Button
+                    disabled={busy}
+                    onClick={()=>void confirmCnr(detail,candidate)}
+                  >
                     Confirm CNR
                   </Button>
                 </div>

@@ -28,12 +28,13 @@ The website database is used only for the five staff login sessions.
 
 | Google Sheet tab | What it stores | Where LawPal uses it |
 | --- | --- | --- |
-| `Case Register` | One row per case, including client ID/name, case number, court, current next hearing, stage, previous date, folder link, status-document link, sync state and timestamps | The Case Register screen and the existing-case choices in Add Update |
+| `Case Register` | One row per case, including client ID/name, case number, its optional CNR, court, current next hearing, stage, previous date, folder link, status-document link, sync state and timestamps | The Case Register screen and the existing-case choices in Add Update |
 | `Daily Court List` | One row for a case on a specific hearing date | The home-screen court list for the selected date |
 | `Clients` | A helper index of client IDs and names plus the latest stage, previous date, court and timestamps | Client-name search; Case Register is also read so an older client still appears even if this helper tab has no row |
 | `Sabuth Activity` | Append-only save journal with request ID, user, action, status and recovery details | Activity screen, duplicate-save protection and document-sync recovery |
 | `Sabuth Documents` | Queue of saved updates waiting to be written to client status documents | The 11 PM IST document sync |
 | `Sabuth Reviews` | Records that a user acknowledged a flagged or incomplete matter | Needs Review screen |
+| `LawPal Court Sync` | The latest automatic eCourts date changes and API errors | The AI changes section under Needs Review |
 | `Sabuth Morning Lists` and `Sabuth Runs` | Legacy scheduler data | Retained for history; the current LawPal workflow does not use them |
 
 The `Sabuth ...` tab names are intentionally retained because they are internal
@@ -61,6 +62,25 @@ row and records the operation in `Sabuth Activity`. It then adds a pending item
 to `Sabuth Documents`. At 11 PM IST, `sabuthDocumentTick` appends the update to
 the correct client's status document while preserving its existing table.
 Document-sync failure does not undo the successful Sheet save.
+
+Each Case Register row stores its own CNR. Clients with several matters may
+therefore have a different CNR for every matter. LawPal displays CNR directly
+after Client / matter in the Case Register table. A user must review an
+eCourts search candidate and press Confirm CNR before it is written; LawPal
+does not save an ambiguous search result automatically.
+
+`lawPalCourtSyncTick` runs at approximately 8 PM IST using a Google Apps Script
+time trigger, so it runs while users' computers are off. It checks only matters
+with a confirmed CNR. When eCourts reports a later next-hearing date, LawPal
+moves that matter to the new date and adds an `AI updated from eCourts` note.
+It does not automatically overwrite stage, case status, court, parties or order
+details. Successful date changes and API failures are appended to
+`LawPal Court Sync` and displayed under Needs Review. The 11 PM IST document
+job then applies the queued date change to the existing client status table.
+
+The Missing Update Detector is separate from the eCourts job. A matter appears
+under Needs Review when its recorded next-hearing date is at least two days in
+the past and no newer hearing date has replaced it.
 
 ### Legacy-data recovery
 
@@ -118,6 +138,7 @@ keys, local D1 files, and generated build output are ignored.
 | --- | --- | --- | --- |
 | `GOOGLE_SCRIPT_URL` | `web/.dev.vars` | Cloudflare Worker secret | Apps Script web-app `/exec` URL |
 | `GOOGLE_SCRIPT_SECRET` | `web/.dev.vars` | Cloudflare Worker secret | Must equal Apps Script property `SABUTH_SECRET` |
+| `ECOURTSINDIA_API_TOKEN` | `web/.dev.vars` and Apps Script Project Settings → Script Properties | Site server secret and Apps Script property | eCourtsIndia Partner API token; never exposed to the browser |
 | `SABUTH_TEAM_CREDENTIALS` | `web/.dev.vars` | Cloudflare Worker secret | Locally generated JSON of salts and password hashes |
 | `ECOURTSINDIA_API_TOKEN` | `web/.dev.vars` | Server-side Site or Cloudflare Worker secret | eCourtsIndia Partner API token; never expose it to browser code |
 | `SABUTH_SECRET` | Never in this repository | Apps Script Project Settings → Script Properties | Private HMAC secret used by the bridge |

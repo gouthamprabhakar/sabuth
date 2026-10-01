@@ -28,7 +28,10 @@ retained as internal compatibility identifiers.
    alias. Review Google's requested permissions yourself.
 5. Store the generated `SABUTH_SECRET` Script Property securely. It must match
    the website secret named `GOOGLE_SCRIPT_SECRET`.
-6. Update the existing web-app deployment with a new version. Preserve its
+6. Add `ECOURTSINDIA_API_TOKEN` under Project Settings → Script Properties.
+   Use the same eCourts Partner API token configured as the Site's server-side
+   secret. Never place the token in `Code.gs` or a Sheet cell.
+7. Update the existing web-app deployment with a new version. Preserve its
    deployment ID, Execute as Me setting and current access setting so the
    `/exec` URL does not change.
 
@@ -48,6 +51,12 @@ date if its daily-list row is missing.
 `Sabuth Activity` is the save journal. `Sabuth Documents` is the status-document
 queue. `Sabuth Reviews` stores review acknowledgements. `Sabuth Morning Lists`
 and `Sabuth Runs` are retained legacy tabs and are not used by the current app.
+`LawPal Court Sync` stores automatic eCourts date changes and API errors shown
+in the app's AI changes section.
+
+The CNR column belongs to `Case Register`. It stores one 16-character CNR for
+one matter. A multi-matter client can therefore have several CNRs. The app
+requires a user to review and confirm a search candidate before saving it.
 
 Every save performs these steps synchronously:
 
@@ -61,6 +70,17 @@ The save returns after the Sheet writes. `sabuthDocumentTick` runs once each
 night at 11 PM IST and appends pending updates to the correct client status
 document while preserving the existing table. A document error is recorded in
 `Sabuth Documents` and does not undo the Sheet save.
+
+`lawPalCourtSyncTick` runs at approximately 8 PM IST. It reads only matters
+with a confirmed CNR. When eCourts returns a later Next Hearing date, the job
+updates Next Hearing and Previous Date, adds an `AI updated from eCourts` note
+to the dated Daily Court List row, and queues the existing 11 PM document job.
+It does not change Stage / Purpose, court, parties, case status or order data.
+API errors are written to `LawPal Court Sync`; the affected legal record stays
+unchanged.
+
+The Apps Script trigger service runs in Google's cloud. Both the 8 PM court
+check and 11 PM document update continue when every office laptop is off.
 
 ## Restoring the older register
 
