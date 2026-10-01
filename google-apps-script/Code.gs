@@ -16,6 +16,7 @@ function clean_(v,n){const s=String(v||'').trim();if(s.length>n)throw Error('A f
 function cell_(v){return /^[=+@-]/.test(String(v))?"'"+v:v}
 function today_(){return Utilities.formatDate(new Date(),TZ,'yyyy-MM-dd')}
 function iso_(s){if(s instanceof Date)return Utilities.formatDate(s,TZ,'yyyy-MM-dd');s=String(s||'').trim();if(!s)return'';let y,m,d;if(/^\d{4}-\d{2}-\d{2}$/.test(s))[y,m,d]=s.split('-').map(Number);else{const a=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/),b=s.match(/^(\d{1,2})[- ]([A-Za-z]{3,9})[- ,]+(\d{4})$/);if(a){d=+a[1];m=+a[2];y=+a[3]}else if(b){d=+b[1];m=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(b[2].slice(0,3).toLowerCase())+1;y=+b[3]}else return''}const x=new Date(Date.UTC(y,m-1,d));return x.getUTCFullYear()===y&&x.getUTCMonth()===m-1&&x.getUTCDate()===d?`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`:''}
+function dateOnly_(v){const m=String(v||'').match(/\d{4}-\d{2}-\d{2}/);return iso_(m?m[0]:v)}
 function needDate_(d){if(!d||iso_(d)!==d)throw Error('A full, valid date is required.');return d}
 function dateText_(d){return Utilities.formatDate(new Date(needDate_(d)+'T12:00:00Z'),'UTC','dd-MMM-yyyy')}
 function timestampISO_(v){if(v instanceof Date)return v.toISOString();const s=String(v||'').trim();if(/^\d{4}-\d{2}-\d{2}T/.test(s)&&!isNaN(new Date(s).valueOf()))return new Date(s).toISOString();const m=s.match(/^(\d{2}-[A-Za-z]{3}-\d{4}) (\d{2}:\d{2}:\d{2}) IST$/);return m&&iso_(m[1])?new Date(iso_(m[1])+'T'+m[2]+'+05:30').toISOString():''}
